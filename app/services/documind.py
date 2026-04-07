@@ -15,6 +15,7 @@ from supabase import create_client
 from dotenv import load_dotenv
 from youtube_transcript_api import YouTubeTranscriptApi
 import re
+import requests
 
 load_dotenv()
 
@@ -287,12 +288,17 @@ def extract_video_id(url):
 
 
 def get_transcript(video_id):
-    try:
-        api = YouTubeTranscriptApi()
-        transcript = api.fetch(video_id, languages=['hi', 'en'])
-        text = " ".join([t.text for t in transcript])
-        if not text or len(text.strip()) < 50:
-            raise ValueError("Transcript too short or empty")
-        return text
-    except Exception as e:
-        raise RuntimeError(f"Could not fetch transcript: {str(e)}")
+    # Supadata free tier: 100 req/day free
+    url = f"https://api.supadata.ai/v1/youtube/transcript?videoId={video_id}&lang=en"
+    headers = {"x-api-key": os.getenv("SUPADATA_API_KEY")}
+    
+    res = requests.get(url, headers=headers, timeout=30)
+    if not res.ok:
+        raise RuntimeError(f"Could not fetch transcript: {res.text[:200]}")
+    
+    data = res.json()
+    content = data.get('content', [])
+    if not content:
+        raise RuntimeError("No transcript available")
+    
+    return ' '.join([item.get('text', '') for item in content])
