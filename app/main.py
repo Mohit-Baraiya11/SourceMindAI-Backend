@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -51,7 +51,12 @@ class ChatRequestYoutubeLink(BaseModel):
 @app.post('/upload_youtube_link')
 def upload_youtube(req: ChatRequestYoutubeLink):
     video_id = extract_video_id(req.url)
-    raw_text = get_transcript(video_id)
+    if not video_id:
+        raise HTTPException(status_code=400, detail="Invalid YouTube URL")
+    try:
+        raw_text = get_transcript(video_id)
+    except RuntimeError as e:
+        raise HTTPException(status_code=422, detail=str(e))
     chunk_and_store(raw_text, video_id, req.user_id)
     return {
         "message": "Transcript indexed successfully",
@@ -117,12 +122,13 @@ def chat_youtube(req: ChatRequestYoutube):
     return {"reply": reply}
 
 
-
 #delete
 @app.delete('/session/{session_id}')
 def delete_session(session_id: str):
     if not session_id or session_id == 'null':
         return {"status": "skipped"}
     supabase = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
+    # Delete messages first (foreign key), then session
+    supabase.table("chat_messages").delete().eq("session_id", session_id).execute()
     supabase.table("chat_sessions").delete().eq("id", session_id).execute()
     return {"status": "deleted"}

@@ -289,9 +289,10 @@ def extract_video_id(url):
 def get_transcript(video_id):
     try:
         api = YouTubeTranscriptApi()
-        transcript = api.fetch(video_id, languages=['hi', 'en'])  # ✅ fix
-
-        return " ".join([t.text for t in transcript])
-
+        transcript = api.fetch(video_id, languages=['hi', 'en'])
+        text = " ".join([t.text for t in transcript])
+        if not text or len(text.strip()) < 50:
+            raise ValueError("Transcript too short or empty")
+        return text
     except Exception as e:
-        return f"Error: {str(e)}"
+        raise RuntimeError(f"Could not fetch transcript: {str(e)}")
